@@ -1,0 +1,8 @@
+pytest
+pydantic
+openai
+python-dotenv
+sqlmodel
+fastapi
+uvicorn
+jinja2
