@@ -83,6 +83,15 @@ Now we move from "One Laptop" to "Many Computers." We will introduce the NATS me
   - Introduce the core Message Envelope (ID, Sender, Payload, Timestamp).
 - **Verification:** Run the system normally. Then use a NATS tool to "replay" all messages to prove the history is intact.
 
+### Phase 7.5: Full Ruggedness Gate (Already Complete)
+- **Goal:** Guarantee the foundational SQLite engine and distributed logic can survive hostile environments and network partitions.
+- **Features:**
+  - Automated Connection Exhaustion and Hard Crash recovery tests.
+  - State Machine Enforcement for orphaned child tasks.
+  - NATS Distributed Layer Integrity against Floods, Slow Consumers, and Connection Storms.
+  - Hypothesis Property-Based Fuzzing for the NATS data plane.
+- **Verification:** `test_phase_7_full_ruggedness.py` suite passes all edge cases.
+
 ### Phase 8: Immutable Audit Logging
 - **Goal:** Ensure every action taken by the swarm is recorded forever.
 - **Features:**
