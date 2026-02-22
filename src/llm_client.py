@@ -14,7 +14,7 @@ class LLMClient:
         Passing a seed and a temperature of 0 ensures near-perfect reproducibility.
         """
         response = self.client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5-nano",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
