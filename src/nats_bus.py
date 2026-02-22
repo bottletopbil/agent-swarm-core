@@ -53,9 +53,9 @@ class NatsBus:
                 else:
                     callback(envelope, msg)
             except Exception as e:
-                print(f"[NATS Error] Failed to process message on {subject}: {e}")
-                # Might want to NAK the message later, wait for it to resend
-                await msg.nak()
+                print(f"[NATS Error] Failed to process message on {subject}, destroying it: {e}")
+                # Use term() instead of nak() to prevent poison pill loops from malformed data
+                await msg.term()
 
         # Using Push subscribe for now, standard for basic worker queues
         sub = await self.js.subscribe(
