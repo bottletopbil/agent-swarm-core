@@ -27,12 +27,6 @@ class Task(SQLModel, table=True):
     requires_planning: bool = Field(default=False)
     depends_on: Optional[str] = Field(default="[]") # JSON string of task IDs this task depends on
 
-class QueueMessage(SQLModel, table=True):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    queue_name: str = Field(index=True)
-    payload: str
-    status: str = Field(default="pending", index=True) # pending or processed
-
 # Create a sqlite engine
 import os
 sqlite_file_name = os.getenv("DB_NAME", "swarm_state.db")
