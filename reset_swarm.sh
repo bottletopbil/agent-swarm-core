@@ -19,6 +19,11 @@ if [ -d "logs" ]; then
     rm -rf logs/*
 fi
 
+if [ -d "nats_data" ]; then
+    echo "🗑️  Clearing NATS Event Bus data..."
+    rm -rf nats_data
+fi
+
 echo "✨ Reset complete. Restarting services..."
 
 # Start services again

@@ -6,3 +6,4 @@ sqlmodel
 fastapi
 uvicorn
 jinja2
+nats-py

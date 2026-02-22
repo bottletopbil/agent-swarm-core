@@ -26,6 +26,13 @@ start_service() {
 # Clear old PIDs if any
 > logs/pids.txt
 
+# Start NATS with JetStream
+echo "Starting nats-server (JetStream)... (Logging to logs/nats.log)"
+mkdir -p nats_data
+nats-server -js -sd nats_data > logs/nats.log 2>&1 &
+echo $! >> logs/pids.txt
+sleep 2 # Let NATS initialize before agents start
+
 # Start all services
 start_service "dashboard.py" "dashboard"
 start_service "coordinator.py" "coordinator"

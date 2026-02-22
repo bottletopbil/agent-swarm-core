@@ -1,15 +1,15 @@
-import time
+import asyncio
 from sqlmodel import select
 from database import get_session, Task, TaskStatus
-from simple_queue import SimpleQueue
+from nats_bus import NatsBus
+from envelope import MessageEnvelope
 
 class CoordinatorService:
     def __init__(self):
-        self.worker_queue = SimpleQueue("worker_queue")
-        self.planner_queue = SimpleQueue("planner_queue")
+        self.bus = NatsBus()
 
-    def run_once(self):
-        """Polls the DB once for pending tasks and pushes them to the queue."""
+    async def run_once(self):
+        """Polls the DB once for pending tasks and publishes them to NATS."""
         with next(get_session()) as session:
             # 1. Handle PENDING tasks
             statement = select(Task).where(Task.status == TaskStatus.PENDING).limit(10)
@@ -21,11 +21,13 @@ class CoordinatorService:
                 session.commit()
                 
                 if task.requires_planning:
-                    print(f"[COORDINATOR] Found Complex Task {task.id}. Pushing to planner_queue.")
-                    self.planner_queue.push({"task_id": task.id})
+                    print(f"[COORDINATOR] Found Complex Task {task.id}. Publishing to tasks.planner.")
+                    env = MessageEnvelope(sender="coordinator", payload={"task_id": task.id})
+                    await self.bus.publish("tasks.planner", env)
                 else:
-                    print(f"[COORDINATOR] Found Simple Task {task.id}. Pushing to worker_queue.")
-                    self.worker_queue.push({"task_id": task.id})
+                    print(f"[COORDINATOR] Found Simple Task {task.id}. Publishing to tasks.worker.")
+                    env = MessageEnvelope(sender="coordinator", payload={"task_id": task.id})
+                    await self.bus.publish("tasks.worker", env)
 
             # 1.5 Handle LOCKED DAG dependencies
             import json
@@ -111,17 +113,24 @@ class CoordinatorService:
                     session.commit()
                     print(f"[COORDINATOR] Parent Task {parent.id} marked DONE (combined all children outputs).")
                 
-    def loop(self):
+    async def loop(self):
         print("Starting Coordinator Service... (Press CTRL+C to stop)")
+        await self.bus.connect()
         try:
             while True:
-                self.run_once()
-                time.sleep(1) # Simple polling delay
-        except KeyboardInterrupt:
+                await self.run_once()
+                await asyncio.sleep(1) # Simple polling delay
+        except asyncio.CancelledError:
             print("\nCoordinator Service stopped.")
+        finally:
+            await self.bus.close()
 
 if __name__ == "__main__":
     from database import create_db_and_tables
     create_db_and_tables()
     service = CoordinatorService()
-    service.loop()
+    
+    try:
+        asyncio.run(service.loop())
+    except KeyboardInterrupt:
+        pass

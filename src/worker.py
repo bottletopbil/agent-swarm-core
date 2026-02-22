@@ -1,17 +1,16 @@
-import time
+import asyncio
 from database import get_session, Task, TaskStatus
-from simple_queue import SimpleQueue
+from nats_bus import NatsBus
+from envelope import MessageEnvelope
 from llm_client import LLMClient
 
 class WorkerService:
     def __init__(self):
-        self.worker_queue = SimpleQueue("worker_queue")
-        self.verifier_queue = SimpleQueue("verifier_queue")
+        self.bus = NatsBus()
         self.llm = LLMClient()
 
-    def process_message(self, msg: dict):
-        task_id = msg.get("task_id")
-        if not task_id: return
+    def _do_work(self, task_id: str) -> bool:
+        if not task_id: return False
         
         with next(get_session()) as session:
             task = session.get(Task, task_id)
@@ -31,33 +30,44 @@ class WorkerService:
                 session.add(task)
                 session.commit()
                 
-                print(f"[WORKER] Finished Task {task.id}. Pushing to verifier_queue.")
-                self.verifier_queue.push({"task_id": task.id})
+                print(f"[WORKER] Finished Task {task.id}. Returning control to async loop.")
+                return True
             except Exception as e:
                 print(f"[WORKER] Error: {e}")
                 task.status = TaskStatus.FAILED
                 task.result = f"Worker Error: {e}"
                 session.add(task)
                 session.commit()
+                return False
 
-    def loop(self):
+    async def _message_handler(self, envelope: MessageEnvelope, msg):
+        task_id = envelope.payload.get("task_id")
+        if task_id:
+            success = await asyncio.to_thread(self._do_work, task_id)
+            if success:
+                print(f"[WORKER] Publishing to tasks.verifier.")
+                env = MessageEnvelope(sender="worker", payload={"task_id": task_id})
+                await self.bus.publish("tasks.verifier", env)
+        await msg.ack()
+
+    async def loop(self):
         print("Starting Worker Service... (Press CTRL+C to stop)")
-        # If the worker previously crashed, any 'in_progress' messages should be reset
-        self.worker_queue.reset_stuck_messages()
+        await self.bus.connect()
+        await self.bus.subscribe("tasks.worker", "workers", self._message_handler)
         
         try:
             while True:
-                payload, msg_id = self.worker_queue.pop()
-                if payload and msg_id:
-                    self.process_message(payload)
-                    self.worker_queue.ack(msg_id)
-                else:
-                    time.sleep(1) # Poll delay
-        except KeyboardInterrupt:
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
             print("\nWorker Service stopped.")
+        finally:
+            await self.bus.close()
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
     service = WorkerService()
-    service.loop()
+    try:
+        asyncio.run(service.loop())
+    except KeyboardInterrupt:
+        pass

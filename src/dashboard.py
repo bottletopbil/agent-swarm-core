@@ -1,11 +1,39 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from contextlib import asynccontextmanager
 from sqlmodel import select
 from database import get_session, Task
+from nats_bus import NatsBus
+from envelope import MessageEnvelope
 import os
+import asyncio
 
-app = FastAPI(title="CAN Swarm Core - Dashboard")
+bus = NatsBus()
+recent_events = []
+
+async def event_handler(env: MessageEnvelope, msg):
+    recent_events.insert(0, {
+        "id": env.id,
+        "sender": env.sender,
+        "task_id": env.payload.get("task_id", "unknown"),
+        "timestamp": env.timestamp,
+        "subject": msg.subject
+    })
+    # Keep only last 100
+    if len(recent_events) > 100:
+        recent_events.pop()
+    await msg.ack()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await bus.connect()
+    # Subscribe to all tasks to monitor
+    sub = await bus.subscribe("tasks.>", "dashboard_monitor", event_handler)
+    yield
+    await bus.close()
+
+app = FastAPI(title="CAN Swarm Core - Dashboard", lifespan=lifespan)
 
 # Create templates directory if it doesn't exist
 os.makedirs("templates", exist_ok=True)
@@ -29,6 +57,7 @@ html_content = """
         .c-verifying h2 { color: #f39c12; border-color: #f39c12; }
         .c-done h2 { color: #2ecc71; border-color: #2ecc71; }
         .c-failed h2 { color: #e74c3c; border-color: #e74c3c; }
+        .c-final h2 { color: #16a085; border-color: #16a085; background-color: #e8f8f5; border-radius: 4px; padding: 10px 0;}
 
         .task-card { background: white; border-radius: 6px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #bdc3c7; }
         .task-card.pending { border-left-color: #f39c12; }
@@ -62,6 +91,13 @@ html_content = """
         <button onclick="submitTask()">Add Task</button>
     </div>
 
+    <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2>📡 Live NATS Event Bus</h2>
+        <div id="event-log" style="height: 200px; overflow-y: auto; background: #2c3e50; color: #ecf0f1; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 0.9em; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);">
+            <!-- JS populated -->
+        </div>
+    </div>
+
     <div class="board" id="board">
         <!-- populated by JS -->
     </div>
@@ -74,6 +110,27 @@ html_content = """
                 renderBoard(tasks);
             } catch (error) {
                 console.error("Error fetching tasks:", error);
+            }
+        }
+
+        async function fetchEvents() {
+            try {
+                const res = await fetch('/api/events');
+                const evts = await res.json();
+                let logHtml = '';
+                evts.forEach(e => {
+                    const date = new Date(e.timestamp * 1000).toLocaleTimeString();
+                    logHtml += `<div style="padding: 4px; border-bottom: 1px solid #34495e;">
+                        <span style="color:#7f8c8d">[${date}]</span> 
+                        <strong style="color:#e67e22; width: 120px; display:inline-block">${e.subject}</strong> 
+                        <span style="color:#bdc3c7">| Sender:</span> <span style="color:#3498db; width: 100px; display:inline-block">${e.sender}</span> 
+                        <span style="color:#bdc3c7">| Task:</span> <span style="color:#2ecc71">${e.task_id}</span> 
+                        <span style="color:#bdc3c7">| EnvID:</span> <span style="color:#95a5a6">${e.id.substring(0,8)}</span>
+                    </div>`;
+                });
+                document.getElementById('event-log').innerHTML = logHtml;
+            } catch (e) {
+                console.error("Error fetching events:", e);
             }
         }
 
@@ -133,11 +190,14 @@ html_content = """
                 'In Progress': [],
                 'Verifying': [],
                 'Done': [],
-                'Failed': []
+                'Failed': [],
+                'Final Output': []
             };
 
             tasks.forEach(task => {
-                if (columns[task.status]) {
+                if (task.status === 'Done' && !task.parent_id) {
+                    columns['Final Output'].push(task);
+                } else if (columns[task.status]) {
                     columns[task.status].push(task);
                 }
             });
@@ -147,17 +207,23 @@ html_content = """
                 <div class="column c-locked"><h2>Locked (${columns['Locked'].length})</h2>${columns['Locked'].map(createCard).join('')}</div>
                 <div class="column c-inprogress"><h2>In Progress (${columns['In Progress'].length})</h2>${columns['In Progress'].map(createCard).join('')}</div>
                 <div class="column c-verifying"><h2>Verifying (${columns['Verifying'].length})</h2>${columns['Verifying'].map(createCard).join('')}</div>
-                <div class="column c-done"><h2>Done (${columns['Done'].length})</h2>${columns['Done'].map(createCard).join('')}</div>
+                <div class="column c-done"><h2>Sub-Tasks Done (${columns['Done'].length})</h2>${columns['Done'].map(createCard).join('')}</div>
                 <div class="column c-failed"><h2>Failed (${columns['Failed'].length})</h2>${columns['Failed'].map(createCard).join('')}</div>
+                <div class="column c-final"><h2>Final Output (${columns['Final Output'].length})</h2>${columns['Final Output'].map(createCard).join('')}</div>
             `;
             
             document.getElementById('board').innerHTML = boardHtml;
         }
 
         // Poll every 1 second
-        setInterval(fetchTasks, 1000);
+        setInterval(() => {
+            fetchTasks();
+            fetchEvents();
+        }, 1000);
+        
         // Initial fetch
         fetchTasks();
+        fetchEvents();
     </script>
 </body>
 </html>
@@ -178,6 +244,10 @@ def get_tasks():
     with next(get_session()) as session:
         tasks = session.exec(select(Task)).all()
         return tasks
+
+@app.get("/api/events")
+def get_events():
+    return recent_events
 
 from pydantic import BaseModel
 class NewTask(BaseModel):

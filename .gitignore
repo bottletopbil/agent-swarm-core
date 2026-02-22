@@ -6,3 +6,4 @@ __pycache__/
 swarm_state.db
 logs/*.log
 logs/pids.txt
+nats_data/

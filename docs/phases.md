@@ -75,7 +75,7 @@ If Part 1 is the "Engine", Part 2 is ripping the engine out of the car and putti
 
 Now we move from "One Laptop" to "Many Computers." We will introduce the NATS message bus to prepare the system to run across multiple physical machines.
 
-### Phase 7: NATS Event Bus (Replacing Redis)
+### Phase 7: NATS Event Bus (Replacing Redis) (Already Complete)
 - **Goal:** Move from simple queues to a robust, replayable event bus.
 - **Features:**
   - Replace the Redis queues from Phase 5 with NATS JetStream pub/sub.

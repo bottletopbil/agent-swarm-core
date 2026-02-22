@@ -17,8 +17,8 @@ if [ -f "logs/pids.txt" ]; then
     rm logs/pids.txt
 fi
 
-# Fallback to killing by process name to catch any stranded processes
 echo "Cleaning up any stranded processes..."
+pkill -f "nats-server" || true
 pkill -f "src/dashboard.py" || true
 pkill -f "src/coordinator.py" || true
 pkill -f "src/planner.py" || true
