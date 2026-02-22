@@ -24,5 +24,6 @@ pkill -f "src/coordinator.py" || true
 pkill -f "src/planner.py" || true
 pkill -f "src/worker.py" || true
 pkill -f "src/verifier.py" || true
+pkill -f "src/audit_daemon.py" || true
 
 echo "✅ All services stopped."

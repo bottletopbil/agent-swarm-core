@@ -8,7 +8,7 @@ This repository contains the `agent-swarm-core` minimal viable product (v2). It 
 The ultimate research goal of the CAN Swarm protocol (v0.2) is to build an orchestrator-free ecosystem where small "minds" (tools, LLM-backed services, or hybrids) self-organize via a shared plan log, market-style negotiation, and quorum verification—with binding policies, cost efficiency, and a path to an open agent economy.
 
 ## Current Architecture
-Currently, the system is in **Phase 7.5**. It operates as a fully asynchronous, distributed framework orchestrating agents over a NATS JetStream event bus, dropping legacy local queues while writing to a persistent SQLite State Tracker.
+Currently, the system is in **Phase 8**. It operates as a fully asynchronous, distributed framework orchestrating agents over a NATS JetStream event bus, dropping legacy local queues while writing to a persistent SQLite State Tracker and an Immutable Audit Log.
 
 It consists of 5 decoupled services communicating via NATS:
 *   **Coordinator**: The orchestrator that routes `PENDING` and `LOCKED` tasks to the appropriate NATS subject, managing DAG dependency resolution.
@@ -43,7 +43,7 @@ open http://localhost:8000
 This Minimal Viable Product proves the core LLM execution loop. In upcoming phases, the central Coordinator and SQLite database will be deprecated in favor of:
 
 1.  **NATS Event Bus**: Replacing local queues with JetStream pub/sub. (Complete)
-2.  **Immutable Audit Logging**: Append-only traces of every Envelope and Action.
+2.  **Immutable Audit Logging**: Append-only traces of every Envelope and Action. (Complete)
 3.  **Cryptographic Signatures**: Ed25519 keys for every Agent, moving to a Trustless network.
 4.  **Consensus & Conflict Resolution**: Scoped consensus per NEED, Lamport Clocks, and deterministic merge rules for Partition Tolerance (AP planning layer, CA finalization).
 5.  **Result Quorum & Challenge Protocol**: Verification bounds where results are only finalized after a challenge window elapses without dispute.
