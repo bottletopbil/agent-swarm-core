@@ -1,0 +1,4 @@
+# file: /Users/rileyhicks/Dev/Real Projects/agent_swarm_parent/agent-swarm-core/src/verify_audit.py
+# hypothesis_version: 6.151.9
+
+['0', '__main__', 'coordinator', 'envelope', 'hash', 'id', 'logs/audit.jsonl', 'payload', 'prev_hash', 'r', 'sender', 'task_id', 'utf-8', 'verifier', 'worker']

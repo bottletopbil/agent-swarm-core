@@ -14,9 +14,9 @@ from envelope import MessageEnvelope
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
 class AuditDaemon:
-    def __init__(self, log_dir="logs"):
+    def __init__(self, log_dir=None):
         self.bus = NatsBus()
-        self.log_dir = log_dir
+        self.log_dir = log_dir or os.environ.get("AUDIT_LOG_DIR", "logs")
         os.makedirs(self.log_dir, exist_ok=True)
         self.log_file = os.path.join(self.log_dir, "audit.jsonl")
         self.running = True

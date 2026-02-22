@@ -1,0 +1,4 @@
+# file: /Users/rileyhicks/Dev/Real Projects/agent_swarm_parent/agent-swarm-core/src/audit_daemon.py
+# hypothesis_version: 6.151.9
+
+[b'\n', '..', '0', 'AUDIT_LOG_DIR', '__main__', 'a', 'audit.jsonl', 'audit_logger', 'envelope', 'hash', 'logged_at', 'logs', 'nak', 'prev_hash', 'r', 'rb', 'src', 'tasks.>', 'utf-8']
