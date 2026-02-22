@@ -5,9 +5,11 @@ from nats.js.api import StreamConfig, RetentionPolicy, StorageType
 from nats.js.errors import NotFoundError
 from envelope import MessageEnvelope
 
+import os
+
 class NatsBus:
-    def __init__(self, nats_url="nats://localhost:4222"):
-        self.nats_url = nats_url
+    def __init__(self, nats_url=None):
+        self.nats_url = nats_url or os.getenv("NATS_URL", "nats://localhost:4222")
         self.nc = NATS()
         self.js = None
 

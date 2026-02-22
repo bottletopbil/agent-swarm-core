@@ -34,7 +34,8 @@ class QueueMessage(SQLModel, table=True):
     status: str = Field(default="pending", index=True) # pending or processed
 
 # Create a sqlite engine
-sqlite_file_name = "swarm_state.db"
+import os
+sqlite_file_name = os.getenv("DB_NAME", "swarm_state.db")
 sqlite_url = f"sqlite:///{sqlite_file_name}"
 engine = create_engine(sqlite_url)
 
