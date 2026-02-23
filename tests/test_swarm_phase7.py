@@ -1,8 +1,27 @@
 import pytest
 import asyncio
 import json
+import subprocess
+import os
+import time
 from envelope import MessageEnvelope
 from nats_bus import NatsBus
+
+TEST_NATS_PORT = 4224
+TEST_NATS_URL = f"nats://localhost:{TEST_NATS_PORT}"
+
+@pytest.fixture(scope="session", autouse=True)
+def isolated_nats():
+    print(f"Starting isolated NATS on {TEST_NATS_PORT}...")
+    nats_proc = subprocess.Popen(["nats-server", "-js", "-p", str(TEST_NATS_PORT), "-sd", "nats_data_testswarm"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    os.environ["NATS_URL"] = TEST_NATS_URL
+    time.sleep(1)
+    yield
+    nats_proc.terminate()
+    nats_proc.wait()
+    import shutil
+    if os.path.exists("nats_data_testswarm"):
+        shutil.rmtree("nats_data_testswarm")
 
 @pytest.mark.asyncio
 async def test_nats_publish_subscribe():
