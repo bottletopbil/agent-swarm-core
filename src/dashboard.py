@@ -8,6 +8,7 @@ from nats_bus import NatsBus
 from envelope import MessageEnvelope
 import os
 import asyncio
+import json
 
 bus = NatsBus()
 recent_events = []
@@ -91,10 +92,19 @@ html_content = """
         <button onclick="submitTask()">Add Task</button>
     </div>
 
-    <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <h2>📡 Live NATS Event Bus</h2>
-        <div id="event-log" style="height: 200px; overflow-y: auto; background: #2c3e50; color: #ecf0f1; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 0.9em; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);">
-            <!-- JS populated -->
+    <div style="display: flex; gap: 20px; margin-bottom: 30px;">
+        <div style="flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2>📡 Live NATS Event Bus</h2>
+            <div id="event-log" style="height: 250px; overflow-y: auto; background: #2c3e50; color: #ecf0f1; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 0.9em; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);">
+                <!-- JS populated -->
+            </div>
+        </div>
+        
+        <div style="flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2>🛡️ Immutable Audit Log</h2>
+            <div id="audit-log" style="height: 250px; overflow-y: auto; background: #2c3e50; color: #ecf0f1; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 0.8em; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);">
+                <!-- JS populated -->
+            </div>
         </div>
     </div>
 
@@ -131,6 +141,29 @@ html_content = """
                 document.getElementById('event-log').innerHTML = logHtml;
             } catch (e) {
                 console.error("Error fetching events:", e);
+            }
+        }
+
+        async function fetchAuditLog() {
+            try {
+                const res = await fetch('/api/audit');
+                const audits = await res.json();
+                let logHtml = '';
+                audits.forEach(a => {
+                    const date = new Date(a.envelope.timestamp * 1000).toLocaleTimeString();
+                    const prevHash = a.prev_hash === "GENESIS" ? "GENESIS" : a.prev_hash.substring(0,8) + "...";
+                    const currHash = a.hash.substring(0,8) + "...";
+                    logHtml += `<div style="padding: 6px; border-bottom: 1px dashed #34495e;">
+                        <span style="color:#7f8c8d">[${date}]</span> 
+                        <span style="color:#2ecc71">🔗 ${prevHash} → ${currHash}</span> <br>
+                        <span style="color:#bdc3c7">EnvID:</span> <span style="color:#95a5a6">${a.envelope.id.substring(0,8)}</span>
+                        <span style="color:#bdc3c7">| Sender:</span> <span style="color:#3498db">${a.envelope.sender}</span>
+                        <span style="color:#bdc3c7">| Action:</span> <span style="color:#e67e22">${a.envelope.verb}</span>
+                    </div>`;
+                });
+                document.getElementById('audit-log').innerHTML = logHtml;
+            } catch (e) {
+                console.error("Error fetching audit logs:", e);
             }
         }
 
@@ -219,11 +252,13 @@ html_content = """
         setInterval(() => {
             fetchTasks();
             fetchEvents();
+            fetchAuditLog();
         }, 1000);
         
         // Initial fetch
         fetchTasks();
         fetchEvents();
+        fetchAuditLog();
     </script>
 </body>
 </html>
@@ -248,6 +283,23 @@ def get_tasks():
 @app.get("/api/events")
 def get_events():
     return recent_events
+
+@app.get("/api/audit")
+def get_audit():
+    log_dir = os.environ.get("AUDIT_LOG_DIR", "logs")
+    log_file = os.path.join(log_dir, "audit.jsonl")
+    try:
+        with open(log_file, "r") as f:
+            lines = f.readlines()
+            
+        entries = []
+        # Return last 100 entries, newest first
+        for line in reversed(lines[-100:]):
+            if line.strip():
+                entries.append(json.loads(line))
+        return entries
+    except FileNotFoundError:
+        return []
 
 from pydantic import BaseModel
 class NewTask(BaseModel):
