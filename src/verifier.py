@@ -16,6 +16,10 @@ class VerifierService:
             task = session.get(Task, task_id)
             if not task: return
             
+            if task.status not in (TaskStatus.VERIFYING,):
+                print(f"[VERIFIER] Task {task.id} already processed (Status: {task.status}). Skipping.")
+                return
+            
             print(f"[VERIFIER] Picked up Task {task.id} for Review.")
             try:
                 passed, notes = self.llm.verify_result(task.prompt, task.result)
@@ -41,7 +45,19 @@ class VerifierService:
     async def _message_handler(self, envelope: MessageEnvelope, msg):
         task_id = envelope.payload.get("task_id")
         if task_id:
-            await asyncio.to_thread(self._do_work, task_id)
+            async def extend_ack():
+                try:
+                    while True:
+                        await asyncio.sleep(15)
+                        await msg.in_progress()
+                except asyncio.CancelledError:
+                    pass
+            bg_task = asyncio.create_task(extend_ack())
+            
+            try:
+                await asyncio.to_thread(self._do_work, task_id)
+            finally:
+                bg_task.cancel()
         await msg.ack()
 
     async def loop(self):

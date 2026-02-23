@@ -14,7 +14,11 @@ class WorkerService:
         
         with next(get_session()) as session:
             task = session.get(Task, task_id)
-            if not task: return
+            if not task: return False
+            
+            if task.status not in (TaskStatus.PENDING, TaskStatus.IN_PROGRESS):
+                print(f"[WORKER] Task {task.id} already processed (Status: {task.status}). Skipping.")
+                return True
             
             print(f"[WORKER] Picked up Task {task.id} (Prompt: '{task.prompt}')")
             system_prompt = "You are an intelligent and concise Agent Swarm Worker. Perform the requested task."
@@ -43,11 +47,24 @@ class WorkerService:
     async def _message_handler(self, envelope: MessageEnvelope, msg):
         task_id = envelope.payload.get("task_id")
         if task_id:
-            success = await asyncio.to_thread(self._do_work, task_id)
-            if success:
-                print(f"[WORKER] Publishing to tasks.verifier.")
-                env = MessageEnvelope(sender="worker", payload={"task_id": task_id})
-                await self.bus.publish("tasks.verifier", env)
+            # Tell NATS to extend the AckWait timeout since LLMs can take >30s
+            async def extend_ack():
+                try:
+                    while True:
+                        await asyncio.sleep(15)
+                        await msg.in_progress()
+                except asyncio.CancelledError:
+                    pass
+            bg_task = asyncio.create_task(extend_ack())
+            
+            try:
+                success = await asyncio.to_thread(self._do_work, task_id)
+                if success:
+                    print(f"[WORKER] Publishing to tasks.verifier.")
+                    env = MessageEnvelope(sender="worker", payload={"task_id": task_id})
+                    await self.bus.publish("tasks.verifier", env)
+            finally:
+                bg_task.cancel()
         await msg.ack()
 
     async def loop(self):
