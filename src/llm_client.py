@@ -8,11 +8,12 @@ class LLMClient:
         # We assume OPENAI_API_KEY is available in the environment
         self.client = OpenAI()
 
-    def generate_text(self, system_prompt: str, user_prompt: str, seed: int = None, temperature: float = 0.7) -> str:
+    def generate_text(self, system_prompt: str, user_prompt: str, seed: int = None, temperature: float = 1.0) -> str:
         """
         Calls the LLM and returns the resulting string.
-        Passing a seed and a temperature of 0 ensures near-perfect reproducibility.
+        Passing a seed and a temperature of 1 ensures near-perfect reproducibility for this model.
         """
+        temperature = 1.0 # Force 1.0 regardless of DB state, as reasoning models reject anything else
         response = self.client.chat.completions.create(
             model="gpt-5-nano",
             messages=[
@@ -56,7 +57,7 @@ class LLMClient:
         except Exception as e:
             return False, f"Failed to parse LLM verification output: {e}"
 
-    def plan_task(self, prompt: str, seed: int = None, temperature: float = 0.7) -> list[dict]:
+    def plan_task(self, prompt: str, seed: int = None, temperature: float = 1.0) -> list[dict]:
         """
         Calls the LLM to break a complex prompt into actionable sub-tasks.
         Expects a JSON response with {"sub_tasks": [{"id": "...", "prompt": "...", "depends_on": ["..."]}]}

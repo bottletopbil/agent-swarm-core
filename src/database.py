@@ -20,7 +20,7 @@ class Task(SQLModel, table=True):
     verifier_notes: Optional[str] = None
     # For Reproducibility
     seed: int = Field(default_factory=lambda: uuid.uuid4().int % 1000000)
-    temperature: float = Field(default=0.7)
+    temperature: float = Field(default=1.0)
     
     # Phase 6.5: DAG Sub-tasking
     parent_id: Optional[str] = Field(default=None, index=True)
